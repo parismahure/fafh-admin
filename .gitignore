@@ -21,7 +21,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-package-lock.json
+# Lockfiles are committed on purpose. Without one, every install resolved
+# fresh, which is how this project ended up unable to start: a transitive
+# ajv went missing. npm is the tool in use here, so its lockfile is
+# tracked and yarn's is not.
 yarn.lock
 
 commit.sh

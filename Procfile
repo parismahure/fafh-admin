@@ -1,1 +1,1 @@
-web: node ./App.js
+web: serve -s build -l $PORT

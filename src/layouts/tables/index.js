@@ -21,6 +21,8 @@ import Card from "@mui/material/Card";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 
+import { BASE_URL } from "config";
+
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -68,7 +70,7 @@ function Tables() {
       redirect: "follow",
     };
 
-    fetch("https://glacial-refuge-38575.herokuapp.com/getAllUsers", requestOptions)
+    fetch(`${BASE_URL}/getAllUsers`, requestOptions)
       .then((response) => response.json())
       .then((users) => {
         console.log("users: ", users);

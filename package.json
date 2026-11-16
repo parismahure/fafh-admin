@@ -38,6 +38,7 @@
     "react-router-dom": "6.2.1",
     "react-scripts": "5.0.0",
     "react-table": "7.7.0",
+    "serve": "^14.2.8",
     "stylis": "4.0.13",
     "stylis-plugin-rtl": "^2.0.2",
     "web-vitals": "2.1.4",
@@ -64,6 +65,8 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "ajv": "^8.20.0",
+    "http-proxy-middleware": "^2.0.12",
     "prettier": "2.5.1"
   }
 }
