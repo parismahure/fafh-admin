@@ -61,3 +61,83 @@ jobs:
             echo "| main.js | $(numfmt --to=iec "$raw") |"
             echo "| gzipped | $(numfmt --to=iec "$gz") |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy to Heroku
+    # Only after the build passes, and only for the default branch.
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Heroku rejects a shallow push.
+          fetch-depth: 0
+
+      - name: Check deploy configuration
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ vars.HEROKU_APP_NAME }}
+        run: |
+          missing=0
+          if [ -z "$HEROKU_API_KEY" ]; then
+            echo "::error::secret HEROKU_API_KEY is not set. Settings > Secrets and variables > Actions > Secrets."
+            missing=1
+          fi
+          if [ -z "$HEROKU_APP_NAME" ]; then
+            echo "::error::variable HEROKU_APP_NAME is not set. Settings > Secrets and variables > Actions > Variables."
+            missing=1
+          fi
+          exit $missing
+
+      # Heroku builds this app itself: the Node buildpack installs
+      # dependencies, runs the build script, prunes devDependencies, and then
+      # runs the Procfile. REACT_APP_API_BASE_URL has to be a Heroku config
+      # var, because Create React App inlines it during that build — setting
+      # it here would have no effect.
+      - name: Push to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ vars.HEROKU_APP_NAME }}
+        run: |
+          set -eu
+          # No set -x in this job: the remote URL carries the token.
+          git push --force \
+            "https://heroku:$HEROKU_API_KEY@git.heroku.com/$HEROKU_APP_NAME.git" \
+            HEAD:refs/heads/main
+
+      - name: Check the deployed app answers
+        env:
+          HEROKU_APP_URL: ${{ vars.HEROKU_APP_URL }}
+          HEROKU_APP_NAME: ${{ vars.HEROKU_APP_NAME }}
+        run: |
+          set -u
+          if [ -z "$HEROKU_APP_URL" ]; then
+            echo "::warning::variable HEROKU_APP_URL is not set, so the deploy was not verified."
+            exit 0
+          fi
+
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /tmp/body -m 15 -w '%{http_code}' "$HEROKU_APP_URL/" || echo 000)
+            if [ "$code" = "200" ]; then
+              # A static host returning 200 for everything is normal, so also
+              # confirm the page is the built app and not a placeholder.
+              if grep -q 'static/js/main' /tmp/body; then
+                echo "deployed app served the built bundle after ${i} attempt(s)"
+                exit 0
+              fi
+              echo "::error::the app answered 200 but did not serve a built bundle"
+              head -c 500 /tmp/body
+              exit 1
+            fi
+            echo "attempt $i: HTTP $code"
+            sleep 10
+          done
+
+          echo "::error::the deploy went out but the app is not answering. It is live and broken."
+          echo "::error::Roll back with: heroku rollback --app $HEROKU_APP_NAME"
+          exit 1
