@@ -1,0 +1,63 @@
+# What this checks, and what it deliberately does not.
+#
+# There are no tests in this repo. The test step is here so that adding the
+# first test file starts gating pull requests automatically, but today it
+# passes on an empty suite and claims nothing.
+#
+# The real gate is the production build. Create React App treats warnings as
+# errors when CI is set, which GitHub Actions does, so this catches unused
+# imports, broken imports and hook-rule violations that `npm start` tolerates.
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Install, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matches the engines field: react-scripts 5 on this dependency tree.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 16
+          cache: npm
+
+      # ci, not install: installs exactly the committed lockfile. This repo
+      # previously ignored its lockfile, so every install resolved fresh and
+      # the app eventually stopped starting because a transitive ajv went
+      # missing. That cannot happen now, and this step is what holds the line.
+      - run: npm ci
+
+      - name: Test
+        run: npm test -- --watchAll=false --passWithNoTests
+
+      # CI=true is set by GitHub Actions, which makes CRA fail on warnings.
+      - name: Build
+        run: npm run build
+
+      - name: Report bundle size
+        run: |
+          main=$(find build/static/js -name 'main.*.js' | head -1)
+          raw=$(stat -c %s "$main")
+          gz=$(gzip -c "$main" | wc -c)
+          {
+            echo "### Production build"
+            echo ""
+            echo "| | size |"
+            echo "|---|---|"
+            echo "| main.js | $(numfmt --to=iec "$raw") |"
+            echo "| gzipped | $(numfmt --to=iec "$gz") |"
+          } >> "$GITHUB_STEP_SUMMARY"
